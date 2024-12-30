@@ -1,0 +1,345 @@
+/*
+Лабораторная работа №1 по дисциплине МРЗВИС
+Выполнена студентом группы 121702 БГУИР Пилатом Максимом Дмитриевичем, программный код заимствован у Летко Александра Юрьевича
+Вариант 13: Реализовать модель линейной рециркуляционной сети с постоянным коэффициентом обучения с нормированными весами
+*/
+
+document.getElementById('imageInput').addEventListener('change', function (event) {
+    const file = event.target.files[0];
+
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const img = new Image();
+            img.src = e.target.result;
+
+            img.onload = function () {
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+                width = canvas.width
+                height = canvas.height
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                const program = new Program(img, canvas)
+            };
+        };
+
+        reader.readAsDataURL(file);
+    }
+})
+
+let epochs = 0
+
+const INPUT_SIZE = 192
+const N = 8
+const M = 8
+let width = 0
+let height = 0
+
+class Program {
+
+    constructor(image, canvas) {
+        this.image = image
+        this.canvas = canvas
+
+        this.imageSplitter = new ImageSplitter(this.image, this.canvas)
+
+        this.neuralNetwork = new NeuralNetwork()
+
+        this.neuralNetwork.train(this.imageSplitter.blocks)
+
+        let rects = []
+
+        for (let bitMap of this.imageSplitter.blocks) {
+
+            let rect = this.neuralNetwork.getRestoredValue(bitMap)
+
+            rects.push(rect[0])
+        }
+
+        const imageRestorer = new ImageRestorer(rects, 8, 256, 256, document.getElementById('canvas2'));
+        const compressedImage = imageRestorer.restoreImage();
+
+        const compressionInfoSize = (
+            compressedImage.length * 8 +
+            INPUT_SIZE * 8 +
+            width * height * 8 +
+            N * M * 8
+        ) * 8
+        const imageSize = this.imageSplitter.blocks.reduce((acc, el) => acc + Math.pow(el.length, 2), 0)
+        document.getElementById('koeff').append(imageSize * 8 / compressionInfoSize)
+    }
+}
+
+class ImageSplitter {
+
+    bitMaps = []
+
+    constructor(image, canvas) {
+        this.N = N
+        this.M = M
+
+        this.image = image
+        this.ctx = canvas.getContext('2d')
+        this.blockSize = 8
+
+        this.blocks = []
+
+        this.splitImageOnBlocks()
+
+    }
+
+    splitImageOnBlocks() {
+        for (let y = 0; y < this.image.height; y += this.blockSize) {
+            for (let x = 0; x < this.image.width; x += this.blockSize) {
+                const imageData = this.ctx.getImageData(x, y, this.blockSize, this.blockSize)
+
+                const filteredRow = []
+                for (let i = 0; i < imageData.data.length; i += 4) {
+                    filteredRow.push(imageData.data[i] * 2 / 255 - 1);     // Red
+                    filteredRow.push(imageData.data[i + 1] * 2 / 255 - 1); // Green
+                    filteredRow.push(imageData.data[i + 2] * 2 / 255 - 1); // Blue
+                }
+
+                this.blocks.push(filteredRow)
+            }
+        }
+    }
+
+    fillBitMaps() {
+        for (let i = 0; i < this.blocks.length; i++) {
+            this.bitMaps.push({
+                r: this.blocks[i].map(el => 2 * el.r / 255 - 1),
+                g: this.blocks[i].map(el => 2 * el.g / 255 - 1),
+                b: this.blocks[i].map(el => 2 * el.b / 255 - 1),
+                a: this.blocks[i].map(el => 2 * el.a / 255 - 1),
+            })
+        }
+    }
+}
+
+class NeuralNetwork {
+
+    firstLayerWeights = [];
+    secondLayerWeights = [];
+
+    iters = 0
+
+    constructor(learningRate = 0.001) {
+        this.learningRate = learningRate;
+
+        this.generateRandomWeights(INPUT_SIZE, 128);
+
+        this.secondLayerWeights = MatrixHelper.transpose(this.firstLayerWeights);
+        
+        this.firstLayerWeights = this.normalize(this.firstLayerWeights)
+        this.secondLayerWeights = this.normalize(this.secondLayerWeights)
+
+        this.firstLayerWeights.map(vector => this.normalizeVector(vector))
+        this.secondLayerWeights.map(vector => this.normalizeVector(vector))
+    }
+
+    train(vectorsOfColor) {
+        let error = 999999;
+        let errorsPerIter = 0
+        while (error > 800) {
+            for (let vectorOfColor of vectorsOfColor) {
+                let feedForwardedMattrixes = this.feedForward(vectorOfColor);
+                errorsPerIter += this.backPropagate(vectorOfColor, feedForwardedMattrixes);
+            }
+
+            error = errorsPerIter
+            console.log(error)
+            errorsPerIter = 0
+        }
+    }
+
+    getRestoredValue(vectorOfColor) {
+        return this.feedForward(vectorOfColor).secondLayerMattrix;
+    }
+
+    feedForward(vectorOfColor) {
+        vectorOfColor = [vectorOfColor];
+        let firstLayerMattrix = MatrixHelper.multiply(vectorOfColor, this.firstLayerWeights);
+        let secondLayerMattrix = MatrixHelper.multiply(firstLayerMattrix, this.secondLayerWeights);
+
+        return {
+            firstLayerMattrix,
+            secondLayerMattrix
+        };
+    }
+
+    backPropagate(vectorOfColor, forwardedMatrices) {
+        let { firstLayerMattrix, secondLayerMattrix } = forwardedMatrices;
+
+        vectorOfColor = [vectorOfColor];
+
+        let deltaLastLayer = MatrixHelper.subtract(secondLayerMattrix, vectorOfColor);
+
+        this.secondLayerWeights = MatrixHelper.subtract(
+            this.secondLayerWeights,
+            MatrixHelper.transpose(MatrixHelper.multiplyByNumber(MatrixHelper.multiply(MatrixHelper.transpose(deltaLastLayer), firstLayerMattrix), this.learningRate))
+        );
+
+        let deltaFirstLayer = MatrixHelper.multiply(deltaLastLayer, MatrixHelper.transpose(this.secondLayerWeights));
+
+        this.firstLayerWeights = MatrixHelper.subtract(
+            this.firstLayerWeights,
+            MatrixHelper.multiplyByNumber(MatrixHelper.multiply(MatrixHelper.transpose(vectorOfColor), deltaFirstLayer), this.learningRate)
+        );
+
+        return (deltaLastLayer.reduce((acc, row) => acc + row.reduce((sum, val) => sum + val ** 2, 0), 0));
+    }
+
+    normalizeVector(vector) {
+        let sum = 0;
+
+        for (let i = 0; i < vector.length; i++) {
+            let c = vector[i];
+            sum += c * c;
+        }
+
+        let sqrSum = Math.sqrt(sum);
+
+        if (sqrSum === 0) {
+            return vector;
+        }
+
+        return vector.map(value => value / sqrSum);
+    }
+
+    generateRandomWeights(inputSize, outputSize) {
+        for (let i = 0; i < inputSize; i++) {
+            this.firstLayerWeights.push(
+                Array.from({ length: outputSize }, () => Math.random() * 2 - 1)
+            );
+        }
+    }
+
+    normalize(vector) {
+        let sum = 0;
+
+        for (let i = 0; i < vector.length; i++) {
+            for (let j = 0; j < vector[i].length; j++) {
+                let c = vector[i][j];
+                sum += c * c;
+            }
+        }
+
+        let sqrSum = Math.sqrt(sum);
+
+        if (sqrSum === 0) {
+            return vector;
+        }
+
+        return vector.map(row => row.map(value => value / sqrSum));
+    }
+}
+
+class ImageRestorer {
+    constructor(bitMaps, blockSize, width, height, canvas) {
+        this.bitMaps = bitMaps;
+        this.blockSize = blockSize;
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.width = width;
+        this.height = height;
+    }
+
+    restoreImage() {
+        const imageData = this.ctx.createImageData(this.width, this.height);
+        const data = imageData.data;
+
+        let blockIndex = 0;
+        for (let y = 0; y < this.height; y += this.blockSize) {
+            for (let x = 0; x < this.width; x += this.blockSize) {
+                const block = this.bitMaps[blockIndex];
+
+                for (let i = 0; i < this.blockSize; i++) {
+                    for (let j = 0; j < this.blockSize; j++) {
+                        if (y + i < this.height && x + j < this.width) {
+                            const pixelIdx = (i * this.blockSize + j) * 3; // Индекс R в block
+                            const dataIdx = ((y + i) * this.width + (x + j)) * 4; // Индекс R в data
+
+                            data[dataIdx] = Math.round((block[pixelIdx] + 1) * 255 / 2); // R
+                            data[dataIdx + 1] = Math.round((block[pixelIdx + 1] + 1) * 255 / 2); // G
+                            data[dataIdx + 2] = Math.round((block[pixelIdx + 2] + 1) * 255 / 2); // B
+                            data[dataIdx + 3] = 255; // Alpha
+                        }
+                    }
+                }
+                blockIndex++;
+            }
+        }
+
+        this.ctx.putImageData(imageData, 0, 0);
+
+        return data
+    }
+}
+
+class MatrixHelper {
+
+    static transpose(matrix) {
+        const rows = matrix.length;
+        const cols = matrix[0].length;
+        const transposed = [];
+
+        for (let i = 0; i < cols; i++) {
+            transposed[i] = [];
+            for (let j = 0; j < rows; j++) {
+                transposed[i][j] = matrix[j][i];
+            }
+        }
+
+        return transposed;
+    }
+
+    static multiply(matrixA, matrixB) {
+        const rowsA = matrixA.length;
+        const colsA = matrixA[0].length;
+        const rowsB = matrixB.length;
+        const colsB = matrixB[0].length;
+
+        if (colsA !== rowsB) {
+            throw new Error("Количество столбцов первой матрицы должно быть равно количеству строк второй матрицы.");
+        }
+
+        const result = new Array(rowsA).fill(null).map(() => new Array(colsB).fill(0));
+
+        for (let i = 0; i < rowsA; i++) {
+            for (let j = 0; j < colsB; j++) {
+                for (let k = 0; k < colsA; k++) {
+                    result[i][j] += matrixA[i][k] * matrixB[k][j];
+                }
+            }
+        }
+
+        return result;
+    }
+
+    static subtract(matrixA, matrixB) {
+        const rowsA = matrixA.length;
+        const colsA = matrixA[0].length;
+        const rowsB = matrixB.length;
+        const colsB = matrixB[0].length;
+
+        if (rowsA !== rowsB || colsA !== colsB) {
+            throw new Error("Размеры матриц должны совпадать для выполнения вычитания.");
+        }
+
+        const result = new Array(rowsA).fill(null).map(() => new Array(colsA).fill(0));
+
+        for (let i = 0; i < rowsA; i++) {
+            for (let j = 0; j < colsA; j++) {
+                result[i][j] = matrixA[i][j] - matrixB[i][j];
+            }
+        }
+
+        return result;
+    }
+
+    static multiplyByNumber(matrix, num) {
+        return matrix.map(row => row.map(el => el * num));
+    }
+}

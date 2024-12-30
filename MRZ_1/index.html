@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Линейная рециркуляционная сеть</title>
+    <style>
+        body {
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid black;
+            margin: 10px;
+        }
+        #koeff {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="imageInput" accept="image/*">
+    <br><br>
+
+    <h2>Результат восстановления изображения:</h2>
+    <canvas id="canvas" width="256" height="256"></canvas>
+    <h2>Восстановленное изображение:</h2>
+    <canvas id="canvas2" width="256" height="256"></canvas>
+
+    <div id="koeff"></div>
+
+    <script src="index.js"></script>
+</body>
+</html>
