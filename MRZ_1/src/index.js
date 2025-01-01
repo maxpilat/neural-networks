@@ -4,6 +4,12 @@
 Вариант 13: Реализовать модель линейной рециркуляционной сети с постоянным коэффициентом обучения с нормированными весами
 */
 
+const RECT_SIZE = 8;
+const INPUT_SIZE = RECT_SIZE * RECT_SIZE * 3;
+const OUTPUT_SIZE = 128;
+const IMAGE_SIZE = 256;
+const BITS_PER_BYTE = 8;
+
 document.getElementById("imageInput").addEventListener("change", function (event) {
   const file = event.target.files[0];
 
@@ -18,7 +24,7 @@ document.getElementById("imageInput").addEventListener("change", function (event
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        new App(img, canvas).run();
+        new App(img, canvas, RECT_SIZE, IMAGE_SIZE, INPUT_SIZE, OUTPUT_SIZE).run();
       };
     };
 
@@ -26,20 +32,19 @@ document.getElementById("imageInput").addEventListener("change", function (event
   }
 });
 
-const INPUT_SIZE = 192;
-const RECT_SIZE = 8;
-const IMAGE_SIZE = 256;
-const BITS_PER_BYTE = 8;
-
 class App {
-  constructor(image, canvas) {
+  constructor(image, canvas, rectSize, imageSize, inputSize, outputSize) {
     this.image = image;
     this.canvas = canvas;
+    this.rectSize = rectSize;
+    this.imageSize = imageSize;
+    this.inputSize = inputSize;
+    this.outputSize = outputSize;
   }
 
   run() {
-    this.imageSplitter = new ImageSplitter(this.image, this.canvas);
-    this.neuralNetwork = new NeuralNetwork(0.001, 800);
+    this.imageSplitter = new ImageSplitter(this.image, this.canvas, this.rectSize);
+    this.neuralNetwork = new NeuralNetwork(0.001, 800, this.inputSize, this.outputSize);
     this.neuralNetwork.train(this.imageSplitter.blocks);
 
     let rects = [];
@@ -51,17 +56,17 @@ class App {
 
     const imageRestorer = new ImageRestorer(
       rects,
-      RECT_SIZE,
-      IMAGE_SIZE,
-      IMAGE_SIZE,
+      this.rectSize,
+      this.imageSize,
+      this.imageSize,
       document.getElementById("canvas2")
     );
     const compressedImage = imageRestorer.restore();
     const compressionInfoSize =
       (compressedImage.length * BITS_PER_BYTE +
-        INPUT_SIZE * BITS_PER_BYTE +
+        this.inputSize * BITS_PER_BYTE +
         this.canvas.width * this.canvas.height * BITS_PER_BYTE +
-        RECT_SIZE * RECT_SIZE * BITS_PER_BYTE) *
+        this.rectSize * this.rectSize * BITS_PER_BYTE) *
       BITS_PER_BYTE;
     const imageSize = this.imageSplitter.blocks.reduce((acc, el) => acc + Math.pow(el.length, 2), 0);
 
@@ -72,18 +77,19 @@ class App {
 class ImageSplitter {
   bitMaps = [];
 
-  constructor(image, canvas) {
+  constructor(image, canvas, rectSize) {
     this.image = image;
     this.ctx = canvas.getContext("2d");
+    this.rectSize = rectSize;
     this.blocks = [];
 
     this.splitImageOnBlocks();
   }
 
   splitImageOnBlocks() {
-    for (let y = 0; y < this.image.height; y += RECT_SIZE) {
-      for (let x = 0; x < this.image.width; x += RECT_SIZE) {
-        const imageData = this.ctx.getImageData(x, y, RECT_SIZE, RECT_SIZE);
+    for (let y = 0; y < this.image.height; y += this.rectSize) {
+      for (let x = 0; x < this.image.width; x += this.rectSize) {
+        const imageData = this.ctx.getImageData(x, y, this.rectSize, this.rectSize);
 
         const filteredRow = [];
         for (let i = 0; i < imageData.data.length; i += 4) {
@@ -102,11 +108,11 @@ class NeuralNetwork {
   firstLayerWeights = [];
   secondLayerWeights = [];
 
-  constructor(learningRate, errorThreshold) {
+  constructor(learningRate, errorThreshold, inputSize, outputSize) {
     this.learningRate = learningRate;
     this.errorThreshold = errorThreshold;
 
-    this.generateRandomWeights(INPUT_SIZE, 128);
+    this.generateRandomWeights(inputSize, outputSize);
 
     this.secondLayerWeights = MatrixHelper.transpose(this.firstLayerWeights);
 
@@ -241,13 +247,13 @@ class ImageRestorer {
         for (let i = 0; i < this.blockSize; i++) {
           for (let j = 0; j < this.blockSize; j++) {
             if (y + i < this.height && x + j < this.width) {
-              const pixelIdx = (i * this.blockSize + j) * 3; // Индекс R в block
-              const dataIdx = ((y + i) * this.width + (x + j)) * 4; // Индекс R в data
+              const pixelIndex = (i * this.blockSize + j) * 3; // Индекс R в block
+              const dataIndex = ((y + i) * this.width + (x + j)) * 4; // Индекс R в data
 
-              data[dataIdx] = Math.round(((block[pixelIdx] + 1) * 255) / 2); // R
-              data[dataIdx + 1] = Math.round(((block[pixelIdx + 1] + 1) * 255) / 2); // G
-              data[dataIdx + 2] = Math.round(((block[pixelIdx + 2] + 1) * 255) / 2); // B
-              data[dataIdx + 3] = 255; // Alpha
+              data[dataIndex] = Math.round(((block[pixelIndex] + 1) * 255) / 2); // R
+              data[dataIndex + 1] = Math.round(((block[pixelIndex + 1] + 1) * 255) / 2); // G
+              data[dataIndex + 2] = Math.round(((block[pixelIndex + 2] + 1) * 255) / 2); // B
+              data[dataIndex + 3] = 255; // Alpha
             }
           }
         }
