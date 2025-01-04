@@ -75,13 +75,12 @@ class App {
 }
 
 class ImageSplitter {
-  bitMaps = [];
+  blocks = [];
 
   constructor(image, canvas, rectSize) {
     this.image = image;
     this.ctx = canvas.getContext("2d");
     this.rectSize = rectSize;
-    this.blocks = [];
 
     this.splitImageOnBlocks();
   }
