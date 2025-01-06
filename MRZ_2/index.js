@@ -105,12 +105,12 @@ class HopfieldNetwork {
       const oldW = this.w.map((row) => [...row]);
 
       for (let image of this.images) {
-        const x_t = MatrixSolver.transpose([image]);
-        const activation = MatrixSolver.multiply(this.w, x_t).map((arr) => arr.map((value) => Math.tanh(value)));
+        const xt = MatrixSolver.transpose([image]);
+        const activation = MatrixSolver.multiply(this.w, xt).map((arr) => arr.map((value) => Math.tanh(value)));
         this.w = MatrixSolver.add(
           this.w,
           MatrixSolver.multiplyByNumber(
-            MatrixSolver.multiply(MatrixSolver.subtract(x_t, activation), MatrixSolver.transpose(x_t)),
+            MatrixSolver.multiply(MatrixSolver.subtract(xt, activation), MatrixSolver.transpose(xt)),
             this.nu / this.size
           )
         );
