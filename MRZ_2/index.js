@@ -66,65 +66,61 @@ class MatrixSolver {
   }
 }
 
-function preprocessAlphabet(alphabet) {
-  return alphabet.map((item) => (Array.isArray(item) && Array.isArray(item[0]) ? item.flat() : item));
-}
-
 function imageBeautifulPrint(image, rows, cols) {
-  image = image.map((value) => Math.sign(value));
-
-  image = image.map((value) => (value === 1 ? " # " : " O "));
-
-  const image2D = [];
   for (let i = 0; i < rows; i++) {
-    image2D.push(image.slice(i * cols, (i + 1) * cols));
+    const row = image
+      .slice(i * cols, (i + 1) * cols)
+      .map((value) => (Math.sign(value) === 1 ? " # " : " O "))
+      .join("");
+    console.log(row);
   }
-
-  image2D.forEach((row) => {
-    console.log(row.join(""));
-  });
 }
 
 class HopfieldNetwork {
-  constructor(images, nu = 1) {
+  constructor(images, learningRate = 1) {
     this.size = images[0].length;
-    this.w = Array.from({ length: this.size }, () => Array(this.size).fill(0));
+    this.weights = Array.from({ length: this.size }, () => Array(this.size).fill(0));
     this.images = images;
     this.negImages = this.getNegImages(this.images);
-    this.nu = nu;
+    this.learningRate = learningRate;
     this.iters = 0;
   }
 
   getNegImages(images) {
-    return images.map((image) => image.map((value) => value * -1));
+    return images.map((image) => image.map((value) => -value));
   }
 
   train(e = 1e-6, maxIters = 10000) {
     for (let i = 0; i < maxIters; i++) {
       this.iters = i;
-      const oldW = this.w.map((row) => [...row]);
+      const oldWeights = this.weights.map((row) => [...row]);
 
       for (let image of this.images) {
-        const xt = MatrixSolver.transpose([image]);
-        const activation = MatrixSolver.multiply(this.w, xt).map((arr) => arr.map((value) => Math.tanh(value)));
-        this.w = MatrixSolver.add(
-          this.w,
+        const transposedImage = MatrixSolver.transpose([image]);
+        const activation = MatrixSolver.multiply(this.weights, transposedImage).map((arr) =>
+          arr.map((value) => Math.tanh(value))
+        );
+        this.weights = MatrixSolver.add(
+          this.weights,
           MatrixSolver.multiplyByNumber(
-            MatrixSolver.multiply(MatrixSolver.subtract(xt, activation), MatrixSolver.transpose(xt)),
-            this.nu / this.size
+            MatrixSolver.multiply(
+              MatrixSolver.subtract(transposedImage, activation),
+              MatrixSolver.transpose(transposedImage)
+            ),
+            this.learningRate / this.size
           )
         );
 
-        for (let i = 0; i < this.w.length; i++) {
-          this.w[i][i] = 0;
+        for (let i = 0; i < this.weights.length; i++) {
+          this.weights[i][i] = 0;
         }
       }
 
       let diffSum = 0;
 
-      for (let i = 0; i < oldW.length; i++) {
-        for (let j = 0; j < oldW[i].length; j++) {
-          diffSum += Math.abs(oldW[i][j] - this.w[i][j]);
+      for (let i = 0; i < oldWeights.length; i++) {
+        for (let j = 0; j < oldWeights[i].length; j++) {
+          diffSum += Math.abs(oldWeights[i][j] - this.weights[i][j]);
         }
       }
 
@@ -133,18 +129,18 @@ class HopfieldNetwork {
       }
     }
 
-    for (let i = 0; i < this.w.length; i++) {
-      this.w[i][i] = 0;
+    for (let i = 0; i < this.weights.length; i++) {
+      this.weights[i][i] = 0;
     }
   }
 
   findImageNum(x, images) {
-    for (let idx = 0; idx < images.length; idx++) {
-      const image = images[idx];
+    for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
+      const image = images[imgIndex];
       const maxDiff = Math.max(...image.map((val, i) => Math.abs(val - x[i])));
 
       if (maxDiff < 1e-2) {
-        return idx; // Возвращает индекс изображения, если найдено совпадение
+        return imgIndex; // Возвращает индекс изображения, если найдено совпадение
       }
     }
     return null; // Если не найдено совпадение
@@ -158,7 +154,7 @@ class HopfieldNetwork {
       relaxationIters += 1;
       console.log(states, "STATES");
       let newState = MatrixSolver.transpose(
-        MatrixSolver.multiply(this.w, MatrixSolver.transpose([states[states.length - 1]]), true)
+        MatrixSolver.multiply(this.weights, MatrixSolver.transpose([states[states.length - 1]]), true)
       ).map((arr) => arr.map((value) => Math.tanh(value)));
       states.push(...newState);
       states.shift();
@@ -219,7 +215,7 @@ let alphabet = [
   ],
 ];
 
-alphabet = preprocessAlphabet(alphabet);
+alphabet = alphabet.map((item) => (Array.isArray(item) && Array.isArray(item[0]) ? item.flat() : item));
 
 const network = new HopfieldNetwork(alphabet, 0.7);
 network.train();
