@@ -82,7 +82,6 @@ class NeuralNetwork {
     this.errorThreshold = errorThreshold;
 
     this.firstLayerWeights = this.generateRandomWeights(inputSize, outputSize);
-
     this.secondLayerWeights = MatrixSolver.transpose(this.firstLayerWeights);
   }
 
