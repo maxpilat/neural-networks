@@ -4,9 +4,9 @@
 Вариант 13: Реализовать модель линейной рециркуляционной сети с постоянным коэффициентом обучения с ненормированными весами
 */
 
-const RECT_SIZE = 8;
+const RECT_SIZE = 4;
 const INPUT_SIZE = RECT_SIZE * RECT_SIZE * 3;
-const OUTPUT_SIZE = 128;
+const OUTPUT_SIZE = 16;
 const IMAGE_SIZE = 256;
 const BITS_PER_BYTE = 8;
 
@@ -44,7 +44,7 @@ class App {
 
   run() {
     const blocks = ImageSolver.split(this.image, this.canvas, this.rectSize);
-    this.neuralNetwork = new NeuralNetwork(0.0001, 3500, this.inputSize, this.outputSize);
+    this.neuralNetwork = new NeuralNetwork(0.0001, 1500, this.inputSize, this.outputSize);
     this.neuralNetwork.train(blocks);
 
     let rects = [];
@@ -152,42 +152,6 @@ class NeuralNetwork {
     return Array.from({ length: inputSize }, () =>
       Array.from({ length: outputSize }, () => Math.random() * range + minValue)
     );
-  }
-
-  normalizeVector(vector) {
-    let sum = 0;
-
-    for (let i = 0; i < vector.length; i++) {
-      let c = vector[i];
-      sum += c * c;
-    }
-
-    let sqrSum = Math.sqrt(sum);
-
-    if (sqrSum === 0) {
-      return vector;
-    }
-
-    return vector.map((value) => value / sqrSum);
-  }
-
-  normalize(vector) {
-    let sum = 0;
-
-    for (let i = 0; i < vector.length; i++) {
-      for (let j = 0; j < vector[i].length; j++) {
-        let c = vector[i][j];
-        sum += c * c;
-      }
-    }
-
-    let sqrSum = Math.sqrt(sum);
-
-    if (sqrSum === 0) {
-      return vector;
-    }
-
-    return vector.map((row) => row.map((value) => value / sqrSum));
   }
 }
 
